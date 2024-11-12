@@ -14,16 +14,20 @@ class Bot(InteractionBot):
 
     def __init__(self):
 
-        self.test_mode = bool(getenv("TEST_GUILD"))
         self.cog_not_loaded: List[str] = []
 
-        if self.test_mode:
-            print("Starting Bot in debug mode...")
-            super().__init__(intents=intents, test_guilds=[int(getenv("TEST_GUILD"))])
-        else:
-            print("Starting Bot in prod mode...")
-            super().__init__(intents=intents)
+        print("Starting Bot in debug mode...")
+        super().__init__(intents=intents, test_guilds=[int(getenv("TEST_GUILD"))])
 
         #self.load_commands()
 
 bot = Bot()
+
+@bot.event
+async def on_ready():
+    channel = bot.get_channel(int(getenv("TEST_CHANNEL")))
+    if channel:
+        button = disnake.ui.Button(label="Register", url=f"{getenv('SITE_URL')}", style=disnake.ButtonStyle.link)
+        view = disnake.ui.View()
+        view.add_item(button)
+        await channel.send("Here is a link button:", view=view)

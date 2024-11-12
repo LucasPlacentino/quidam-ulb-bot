@@ -24,13 +24,13 @@ logger = logging.getLogger("bot")
 
 class Bot(InteractionBot):
 
-    def __init__(self, _logger, _logFormatter, _locale: Locale):
+    def __init__(self, _logger, _logFormatter, _debug=False):
 
-        self.locale = _locale
+        self.locale = Locale(debug=_debug)
         self.logger = _logger
         logger = _logger
         self.logFormatter = _logFormatter
-        self.test_mode = bool(os.getenv("TEST_GUILD"))
+        self.test_mode = bool(getenv("TEST_GUILD"))
         self.cog_not_loaded: List[str] = []
 
         if self.test_mode:

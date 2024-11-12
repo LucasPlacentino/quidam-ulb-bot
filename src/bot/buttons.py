@@ -17,7 +17,7 @@ logger = logging.getLogger("bot")
 class RegisterButton(disnake.ui.Button):
     
     def __init__(self, user: disnake.User) -> None:
-        super().__init__(style=disnake.ButtonStyle.url, url=f"{getenv("SITE_URL")}", label="Register", custom_id="register")
+        super().__init__(style=disnake.ButtonStyle.link, url=f"{getenv("SITE_URL")}", label=f"Register")
         self.user = user
 
     """
