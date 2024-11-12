@@ -77,16 +77,18 @@ class User(ormar.Model): #! also inherit from DiscordUser (from Disnake) ?
     #guilds: Optional[List[DiscordGuild]] = ormar.ManyToMany(DiscordGuild, through="UserGuild")
     guilds: List[Guild] = ormar.ManyToMany(Guild, skip_reverse=True) # can be empty on User creation, skip_reverse=True because guilds do not need to know about users
 
+    """ # Necessary ?
     async def save(self):
         if DEBUG:
             logger.debug(f"Saving user {self.cas_username} to database")
-        await super().save()
-
+        return await super().save()
+    """
 
 
 
 # ------------------------------
 
+"""
 class User(BaseModel):
     cas_username: str
     cas_email: str
@@ -140,6 +142,8 @@ class User(BaseModel):
     
     class Config:
         orm_mode = True
+"""
+
 
 """
 

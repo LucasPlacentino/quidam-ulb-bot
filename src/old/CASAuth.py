@@ -9,8 +9,8 @@ import xml.etree.ElementTree as ET # or from lxml import etree as ET
 import logging
 from fastapi import Request
 
-from .models import User
-from .app import app, DEBUG
+from ..models import User
+from ..app import app, DEBUG
 
 load_dotenv()
 
