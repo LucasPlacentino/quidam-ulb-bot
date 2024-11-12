@@ -4,7 +4,7 @@ from os import getenv
 from dotenv import load_dotenv
 load_dotenv()
 
-DEBUG = True if getenv("DEBUG") is not None and getenv("DEBUG") != "" else False
+DEBUG = True if getenv("DEBUG") or getenv("DEBUG") is not None or getenv("DEBUG") != "" else False
 
 from .database import Base
 from fastapi_discord import Guild as DiscordGuild

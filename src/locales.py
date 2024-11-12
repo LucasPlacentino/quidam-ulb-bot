@@ -3,7 +3,7 @@ import json
 import logging
 
 DEFAULT_LANG = getenv("DEFAULT_LANG", "en")
-#DEBUG=True if getenv("DEBUG") is not None or getenv("DEBUG") != "" else False
+#DEBUG=True if getenv("DEBUG") or getenv("DEBUG") is not None or getenv("DEBUG") != "" else False
 
 logger = logging.getLogger("lang")
 

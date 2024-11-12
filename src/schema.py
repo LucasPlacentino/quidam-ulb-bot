@@ -1,7 +1,9 @@
+"""
 from sqlalchemy import Column, Integer, String, ForeignKey, Table
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
+"""
 
 #! ----------------------------
 #! NOT NECESSARY IF USING ORMAR

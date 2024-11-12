@@ -45,7 +45,7 @@ VERSION = "2.0.0-alpha6"
 
 # ------------
 
-DEBUG=True if getenv("DEBUG") is not None or getenv("DEBUG") != "" else False
+DEBUG=True if getenv("DEBUG") or getenv("DEBUG") is not None or getenv("DEBUG") != "" else False
 
 logger = logging.getLogger("app")
 
