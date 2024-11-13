@@ -34,7 +34,7 @@ from httpx import AsyncClient
 from contextlib import asynccontextmanager
 
 from utils import addLoggingLevel
-from bot import Bot # TODO: implement bot
+#from bot import Bot # TODO: implement bot
 from locales import Locale, DEFAULT_LANG
 
 # ------------
