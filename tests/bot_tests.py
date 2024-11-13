@@ -25,15 +25,42 @@ bot = Bot()
 
 HISTORY_LIMIT = 200
 
+@bot.slash_command()
+async def ping(ctx):
+    await ctx.send("Pong!")
+
+@bot.slash_command(
+        default_member_permissions=disnake.Permissions.all(),
+        dm_permission=False
+)
+async def send_register_message_here(ctx):
+    channel = ctx.channel
+    view = disnake.ui.View()
+    button = disnake.ui.Button(label='Register', url=f"{getenv('SITE_URL')}", style=disnake.ButtonStyle.link)
+    view.add_item(button)
+    #await channel.send("Use this link to register:", view=view)
+    #await ctx.send("Message sent!", ephemeral=True)
+    channel_dropdown = disnake.ui.ChannelSelect() # FIXME: This is not working yet: https://guide.disnake.dev/interactions/select-menus#example-of-stringselects
+    channel_dropdown.callback = func # ?
+    await ctx.send("Choose a channel to send the register message:", view=channel_dropdown)
+    print(channel_dropdown.values[0])
+
+async def func():
+    print("Selected channel")
+
+
+
 async def check_bot_message_doesnt_exists(channel: disnake.TextChannel) -> bool:
     pinned_messages = await channel.pins()
-    async for message in pinned_messages:
+    for message in pinned_messages:
         if message.author == bot.user:
-            print("A (pinned) message from the bot already exists in the channel.")
+            print(message)
+            print(message.content)
             return False
     async for message in channel.history(limit=HISTORY_LIMIT):
         if message.author == bot.user:
-            print("A message from the bot already exists in the channel.")
+            print(message)
+            print(message.content)
             return False
     return True
 
@@ -55,9 +82,16 @@ async def on_ready():
         print(f"Channel with ID {CHANNEL_ID} not found.")
 
     if sending_register_button:
-        sent_message = await channel.send("Use this link to register:",
-                                          view=view,
-                                          silent=True
-                                          )
-        await sent_message.pin()
+        try:
+            sent_message = await channel.send("Use this link to register:", view=view)
+        except disnake.errors.Forbidden:
+            print("Could not send the message, the bot does not have the permission to send messages.")
+        try:
+            await sent_message.pin()
+        except disnake.errors.Forbidden:
+            print("Could not pin the message, the bot does not have the permission to pin messages.")
 
+print("Running bot...")
+bot.run(getenv("DISCORD_BOT_TOKEN"))
+
+bot.close()
