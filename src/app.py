@@ -95,7 +95,7 @@ discord_auth = DiscordOAuthClient(
     client_id=getenv('DISCORD_CLIENT_ID'),
     client_secret=getenv('DISCORD_CLIENT_SECRET'),
     #redirect_url=getenv('DISCORD_REDIRECT_URI'),
-    redirect_uri=str(getenv("SITE_URL", "http://localhost:8000"))+"url_for('discord_callback')",
+    redirect_uri=(str(getenv("SITE_URL", "http://localhost:8000")) if not DEBUG else "http://localhost:8000")+"/discord-callback",
     scopes=("identify","guilds")#, "guilds", "email") # scopes default: just "identify"
 )
 logger.info(f"discord_auth scopes: {discord_auth.scopes.replace('%20', '_')}")
@@ -140,7 +140,7 @@ app.mount("/static", StaticFiles(directory="src/static"), name="static")
 cas_client = CASClient(
     version=getenv('CAS_VERSION', 1),
     #service_url=getenv('CAS_SERVICE_URL', "http://localhost:8000/login"),
-    service_url=str(getenv('SITE_URL', "http://localhost:8000"))+"/login",
+    service_url=(str(getenv('SITE_URL', "http://localhost:8000")) if not DEBUG else "http://localhost:8000")+"/login",
     server_url=getenv('CAS_SERVER_URL'),
     #validate_url=getenv('CAS_VALIDATE_URL', "/serviceValidate"),
 )
@@ -294,7 +294,7 @@ async def login(request: Request, next: Optional[str] = None, ticket: Optional[s
     service_ticket = ticket # ST from user to verify with CAS server
     if request.session.get("user", None):
         # Already logged in
-        return RedirectResponse(request.url_for('user'))
+        return RedirectResponse(request.url_for('user', lang=request.session['lang']))
 
     # next = request.args.get('next')
     # ticket = request.args.get('ticket')
@@ -314,10 +314,12 @@ async def login(request: Request, next: Optional[str] = None, ticket: Optional[s
         logger.debug(f'next: {next}')
 
     # Send service ticket (ST) to CAS server to verify, get back user details as xml/dict
-    user_from_cas, attributes_from_cas, pgtiou = await cas_client.verify_ticket(service_ticket) # pgtIou means Proxy Granting Ticket IOU
+    user_from_cas, attributes_from_cas, pgtiou = cas_client.verify_ticket(service_ticket) # pgtIou means Proxy Granting Ticket IOU
 
     if DEBUG:
-        logger.debug('CAS verify service_ticket response: user: %s, attributes: %s, pgtiou: %s', user_from_cas, attributes_from_cas, pgtiou)
+        logger.debug("Got response from ticket verification")
+        logger.debug(f"CAS verify service_ticket response: user: {user_from_cas}, attributes: {attributes_from_cas}, pgtiou: {pgtiou}")
+        logger.debug(f"attribute.cn (complete name) = {attributes_from_cas.get('cn')}, attribute.mail = {attributes_from_cas.get('mail')}, user = {user_from_cas}, attributes_from_cas.supannRefId = {attributes_from_cas.get('supannRefId')}, attributes_from_cas.supannRoleEntite (group) = {attributes_from_cas.get('supannRoleEntite')}")
 
     if not user_from_cas: # Failed to verify service_ticket
         login_url = request.url_for('login')
@@ -326,7 +328,7 @@ async def login(request: Request, next: Optional[str] = None, ticket: Optional[s
         return RedirectResponse(login_url)
     else:  # Login successfully, redirect according `next` query parameter.? or to /user
         #response = RedirectResponse(next)
-        response = RedirectResponse(request.url_for('user'))
+        response = RedirectResponse(request.url_for('user', lang=request.session['lang']))
         request.session['user'] = dict(user=user_from_cas)
         return response
 
@@ -365,7 +367,7 @@ async def discord_login(request: Request):
     if DEBUG or user:
         # check if already logged in with discord, redirect to user if so
         if request.session.get("discord_token"):
-            return RedirectResponse(request.url_for('user'))
+            return RedirectResponse(request.url_for('user',lang=request.session['lang']))
 
         #TODO:
         #user_session_state = generate_random(seed=request.session.items())
@@ -406,38 +408,43 @@ async def discord_callback(request: Request, code: str, state: str):
         logger.debug(f"discord_callback: code={code}, state={state}")
 
         token, refresh_token = await discord_auth.get_access_token(code) # ?
-        #if getenv("DEBUG"):
-        #    logging.debug(f"discord_callback: token={token}, refresh_token={refresh_token}")
+        if getenv("DEBUG"):
+            logger.debug(f"discord_callback: token={token}, refresh_token={refresh_token}")
         request.session['discord_refresh_token'] = refresh_token
         request.session['discord_token'] = token #await discord_auth.get_token(request=request) #! or just token from above ?
 
         #TODO: get user info from discord
         user: DiscordUser = await get_user(token=token)
-        #user: DiscordUser = None
 
         if DEBUG:
-            logger.debug(f"discord_callback: get_user: {user}")
-        ##user: DiscordUser = await discord_auth.user(request=request)
+            logger.debug(f"discord_callback: get_user.username: {user.username}")
+        ###user: DiscordUser = await discord_auth.user(request=request)
         request.session['discord_username'] = user.username+(str(user.discriminator) if user.discriminator else "") # ?
         request.session["discord_global_name"] = user.global_name
         request.session["discord_id"] = user.id
+        # avatar is https://cdn.discordapp.com/avatars/{user.id}/{user.avatar}.png
 
         try:
-            logging.debug("discord_callback: getting user guilds")
+            logger.debug("discord_callback: getting user guilds")
             #TODO: get user guilds from discord
-            user_guilds: List[DiscordGuild] = await get_user_guilds(token=token)
-            #if getenv("DEBUG"):
-            #    logging.debug(f"discord_callback: user_guilds={user_guilds}")
-            ##user_guilds: List[DiscordGuild] = await discord_auth.guilds()
-            
+            all_user_guilds: List[DiscordGuild] = await get_user_guilds(token=token)
+            if getenv("DEBUG"):
+                logger.debug(f"discord_callback: user_guilds[0]={all_user_guilds[0]}")
+            ###user_guilds: List[DiscordGuild] = await discord_auth.guilds()
+
+            #user_guilds = [x for x in all_user_guilds if x in db.get_all_guilds()] #TODO: check which guilds that the user and the bot are both in, and only put the intersect in the session
             #request.session["discord_guilds"] = user_guilds
-            #TODO: check which guilds that the user and the bot are both in, and only put the intersect in the session
         except:
             logger.error(f"ScopeMissing error in Discord API Client: missing \"guilds\" in scopes -> ignoring user guilds")
 
-        assert state == "my_test_state" # compares state for security # TODO: assert state
-        
-        return RedirectResponse(request.url_for('user'))
+        try:
+            assert state == "my_test_state" # compares state for security # TODO: assert state
+        except AssertionError:
+            request.session.clear()
+            logger.error("discord_callback: state does not match")
+            return RedirectResponse(request.url_for('login'), status_code=status.HTTP_406_NOT_ACCEPTABLE)
+
+        return RedirectResponse(request.url_for('user', lang=request.session['lang']))
         ##try:
         ##    await discord_auth.callback(request)
         ##    return RedirectResponse(request.url_for('user'))
@@ -491,12 +498,12 @@ async def discord_logout(request: Request):#, token: str = Depends(discord_auth.
             request.session.pop("discord_id", None)
             request.session.pop("discord_guilds", None)
         
-        return RedirectResponse(request.url_for('user'))
+        return RedirectResponse(request.url_for('user', lang=request.session['lang']))
     
     except Unauthorized:
         cas_user = request.session.get("user")
         if cas_user:
-            return RedirectResponse(request.url_for('user'))
+            return RedirectResponse(request.url_for('user', lang=request.session['lang']))
         else:
             return RedirectResponse(request.url_for('login'), status_code=status.HTTP_401_UNAUTHORIZED)
     except KeyError:
@@ -544,9 +551,11 @@ async def force_add_roles(request: Request):
         await bot.add_roles(guild.discord_guild_id, user_discord_id)
     """
     if request.session['lang'] in app.locale.lang_list:
-        return RedirectResponse(url=f"/{request.session['lang']}/user", status_code=status.HTTP_303_SEE_OTHER)
+        #return RedirectResponse(url=f"/{request.session['lang']}/user", status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(request.url_for('user', lang=request.session['lang']), status_code=status.HTTP_303_SEE_OTHER)
     else:
-        return RedirectResponse(url=f"/{DEFAULT_LANG}/user", status_code=status.HTTP_303_SEE_OTHER)
+        #return RedirectResponse(url=f"/{DEFAULT_LANG}/user", status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(request.url_for('user', lang=DEFAULT_LANG), status_code=status.HTTP_303_SEE_OTHER)
 
 # ---- other pages ----
 
@@ -556,7 +565,9 @@ async def help_without_lang(request: Request):
     pref_lang = lang_header.split(',')[0].split(';')[0].strip().split('-')[0].lower()
     if pref_lang in app.locale.lang_list:
         return RedirectResponse(url=f"/{pref_lang}/help")
+        return RedirectResponse(url_for('help', lang=pref_lang))
     return RedirectResponse(url=f"/{DEFAULT_LANG}/help", status_code=status.HTTP_308_PERMANENT_REDIRECT)
+    return RedirectResponse(url_for('help', lang=DEFAULT_LANG), status_code=status.HTTP_308_PERMANENT_REDIRECT)
 @app.get('/{lang}/help', response_class=HTMLResponse)
 async def help(request: Request, lang: Annotated[str, Path(title="2-letter language code", max_length=2, min_length=2, examples=["en","fr"])]):
     return templates.TemplateResponse(name="help.jinja", context={"request": request, "current_lang": lang, "lang_list": app.locale.lang_list, "page_title": app.locale.lang_str('help_page_title', lang)})
@@ -567,7 +578,9 @@ async def about_without_lang(request: Request):
     pref_lang = lang_header.split(',')[0].split(';')[0].strip().split('-')[0].lower()
     if pref_lang in app.locale.lang_list:
         return RedirectResponse(url=f"/{pref_lang}/about")
+        return RedirectResponse(url_for('about', lang=pref_lang))
     return RedirectResponse(url=f"/{DEFAULT_LANG}/about", status_code=status.HTTP_308_PERMANENT_REDIRECT)
+    return RedirectResponse(url_for('about', lang=DEFAULT_LANG), status_code=status.HTTP_308_PERMANENT_REDIRECT)
 @app.get('/{lang}/about', response_class=HTMLResponse)
 async def about(request: Request, lang: Annotated[str, Path(title="2-letter language code", max_length=2, min_length=2, examples=["en","fr"])]):
     return templates.TemplateResponse(name="about.jinja", context={"request": request, "current_lang": lang, "lang_list": app.locale.lang_list, "page_title": app.locale.lang_str('about_page_title', lang)})
@@ -578,7 +591,9 @@ async def privacy_policy_without_lang(request: Request):
     pref_lang = lang_header.split(',')[0].split(';')[0].strip().split('-')[0].lower()
     if pref_lang in app.locale.lang_list:
         return RedirectResponse(url=f"/{pref_lang}/privacy-policy")
+        return RedirectResponse(url_for('privacy_policy', lang=pref_lang))
     return RedirectResponse(url=f"/{DEFAULT_LANG}/privacy-policy", status_code=status.HTTP_308_PERMANENT_REDIRECT)
+    return RedirectResponse(url_for('privacy_policy', lang=DEFAULT_LANG), status_code=status.HTTP_308_PERMANENT_REDIRECT)
 @app.get('/{lang}/privacy-policy', response_class=HTMLResponse)
 async def privacy_policy(request: Request, lang: Annotated[str, Path(title="2-letter language code", max_length=2, min_length=2, examples=["en","fr"])]):
     return templates.TemplateResponse(name="privacypolicy.jinja", context={"request": request, "current_lang": lang, "lang_list": app.locale.lang_list, "page_title": app.locale.lang_str('privacy_policy', lang)})
@@ -589,7 +604,9 @@ async def terms_of_service_without_lang(request: Request):
     pref_lang = lang_header.split(',')[0].split(';')[0].strip().split('-')[0].lower()
     if pref_lang in app.locale.lang_list:
         return RedirectResponse(url=f"/{pref_lang}/terms-of-service")
+        return RedirectResponse(url_for('terms_of_service', lang=pref_lang))
     return RedirectResponse(url=f"/{DEFAULT_LANG}/terms-of-service", status_code=status.HTTP_308_PERMANENT_REDIRECT)
+    return RedirectResponse(url_for('terms_of_service', lang=DEFAULT_LANG), status_code=status.HTTP_308_PERMANENT_REDIRECT)
 @app.get('/{lang}/terms-of-service', response_class=HTMLResponse)
 async def terms_of_service(request: Request, lang: Annotated[str, Path(title="2-letter language code", max_length=2, min_length=2, examples=["en","fr"])]):
     return templates.TemplateResponse(name="tos.jinja", context={"request": request, "current_lang": lang, "lang_list": app.locale.lang_list, "page_title": app.locale.lang_str('terms_of_service', lang)})
