@@ -315,9 +315,13 @@ async def login(request: Request, next: Optional[str] = None, ticket: Optional[s
 
     # Send service ticket (ST) to CAS server to verify, get back user details as xml/dict
     user_from_cas, attributes_from_cas, pgtiou = cas_client.verify_ticket(service_ticket) # pgtIou means Proxy Granting Ticket IOU
+    proxy_ticket = cas_client.get_proxy_ticket(pgtiou) # get Proxy Ticket (PT) for Proxy Callback
+    user_from_cas_proxy, attributes_from_cas_proxy, pgtiou_proxy = cas_client.verify_ticket(proxy_ticket) # verify ticket again to get user details
 
     if DEBUG:
         logger.debug("Got response from ticket verification")
+        logger.debug(f"proxy_ticket: {proxy_ticket}")
+        logger.debug(f"user_from_cas_proxy, attributes_from_cas_proxy, pgtiou_proxy: {user_from_cas_proxy}, {attributes_from_cas_proxy}, {pgtiou_proxy}")
         logger.debug(f"CAS verify service_ticket response: user: {user_from_cas}, attributes: {attributes_from_cas}, pgtiou: {pgtiou}")
         logger.debug(f"attribute.cn (complete name) = {attributes_from_cas.get('cn')}, attribute.mail = {attributes_from_cas.get('mail')}, user = {user_from_cas}, attributes_from_cas.supannRefId = {attributes_from_cas.get('supannRefId')}, attributes_from_cas.supannRoleEntite (group) = {attributes_from_cas.get('supannRoleEntite')}")
 
