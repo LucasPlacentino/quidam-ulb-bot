@@ -1,6 +1,7 @@
 from os import getenv, listdir, path
 import json
 import logging
+import sys
 
 DEFAULT_LANG = getenv("DEFAULT_LANG", "en")
 #DEBUG=True if getenv("DEBUG") or getenv("DEBUG") is not None or getenv("DEBUG") != "" else False
@@ -35,6 +36,10 @@ class Locale:
                 logger.info(f"Successfully loaded {lang_code} locale file")
             except Exception as e:
                 logger.error(f"Failed to load {lang_code} locale file: {e}")
+
+        if len(self.languages) == 0:
+            logger.error("No locale files found, must at least have 1, exiting...")
+            sys.exit(1)
     
     def lang_str(self, string: str, user_lang: str) -> str:
         if user_lang not in self.languages.keys():
