@@ -1,7 +1,7 @@
 # cas-sso-discord-bot
 
 import os
-from os import getenv
+from os import getenv, path
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -32,6 +32,7 @@ from typing import Annotated #TODO: use Annotated
 from time import time
 from httpx import AsyncClient
 from contextlib import asynccontextmanager
+from json import load
 
 from utils import addLoggingLevel
 #from bot import Bot # TODO: implement bot
@@ -86,6 +87,15 @@ def init():
     logger.info("### Description: "+str(getenv("APP_DESCRIPTION")))
     logger.info("###------------------------")
 
+    try:
+        with open(path.join(path.dirname(__file__),"../config/cas_attributes_filter.json"), "r", encoding="utf-8") as cas_attr_file:
+            app.cas_attr_filter = load(cas_attr_file)
+        logger.info("Successfully loaded cas_attributes_filter.json:")
+        logger.info(app.cas_attr_filter)
+    except FileNotFoundError:
+        logger.error("config/cas_attributes_filter.json not found")
+        exit(1)
+
     #logger.info("Initializing DiscordClient")
     #discord_auth.init()
     # ------ init() end ------
@@ -108,6 +118,7 @@ class App(FastAPI):
         super().__init__(*args, **kwargs)
         self.locale: Locale = None # extends FastAPI with locale
         self.discord = discord_auth
+        self.cas_attr_filter = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI): # replaces deprecated @app.on_event("startup") and @app.on_event("shutdown")
@@ -318,12 +329,18 @@ async def login(request: Request, next: Optional[str] = None, ticket: Optional[s
     proxy_ticket = cas_client.get_proxy_ticket(pgtiou) # get Proxy Ticket (PT) for Proxy Callback
     user_from_cas_proxy, attributes_from_cas_proxy, pgtiou_proxy = cas_client.verify_ticket(proxy_ticket) # verify ticket again to get user details
 
+    # Ony keep attributes that are in the filter (from file cas_attributes_filter.json)
+    filtered_attributes = {key: value for key, value in attributes_from_cas.items() if key in app.cas_attr_filter}
+
     if DEBUG:
         logger.debug("Got response from ticket verification")
         logger.debug(f"proxy_ticket: {proxy_ticket}")
         logger.debug(f"user_from_cas_proxy, attributes_from_cas_proxy, pgtiou_proxy: {user_from_cas_proxy}, {attributes_from_cas_proxy}, {pgtiou_proxy}")
         logger.debug(f"CAS verify service_ticket response: user: {user_from_cas}, attributes: {attributes_from_cas}, pgtiou: {pgtiou}")
         logger.debug(f"attribute.cn (complete name) = {attributes_from_cas.get('cn')}, attribute.mail = {attributes_from_cas.get('mail')}, user = {user_from_cas}, attributes_from_cas.supannRefId = {attributes_from_cas.get('supannRefId')}, attributes_from_cas.supannRoleEntite (group) = {attributes_from_cas.get('supannRoleEntite')}")
+        logger.debug(f"attributes_filter: {app.cas_attr_filter}")
+        logger.debug(f"filtered_attributes: {filtered_attributes}")
+
 
     if not user_from_cas: # Failed to verify service_ticket
         login_url = request.url_for('login')
