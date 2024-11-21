@@ -93,7 +93,7 @@ def init():
         logger.info("Successfully loaded cas_attributes_filter.json:")
         logger.info(app.cas_attr_filter)
     except FileNotFoundError:
-        logger.error("config/cas_attributes_filter.json not found")
+        logger.error("config/cas_attributes_filter.json not found, copy the cas_attributes_filter.json.example file, set your filtering CAS attributes and rename it to cas_attributes_filter.json")
         exit(1)
 
     #logger.info("Initializing DiscordClient")
