@@ -1,0 +1,10 @@
+[
+    {
+        "id": "cn",
+        "name": "Complete/Common Name"
+    },
+    {
+        "id": "mail",
+        "name": "Email Address"
+    }
+]
