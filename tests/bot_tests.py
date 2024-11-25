@@ -1,6 +1,7 @@
 import disnake
 from disnake.ext import commands
 from disnake.ext.commands import InteractionBot
+from disnake import ChannelType
 
 from os import getenv
 from dotenv import load_dotenv
@@ -33,20 +34,42 @@ async def ping(ctx):
         default_member_permissions=disnake.Permissions.all(),
         dm_permission=False
 )
-async def send_register_message_here(ctx):
+async def setup(ctx):
     channel = ctx.channel
     view = disnake.ui.View()
     button = disnake.ui.Button(label='Register', url=f"{getenv('SITE_URL')}", style=disnake.ButtonStyle.link)
-    view.add_item(button)
+    #view.add_item(button)
+    
     #await channel.send("Use this link to register:", view=view)
     #await ctx.send("Message sent!", ephemeral=True)
-    channel_dropdown = disnake.ui.ChannelSelect() # FIXME: This is not working yet: https://guide.disnake.dev/interactions/select-menus#example-of-stringselects
-    channel_dropdown.callback = func # ?
-    await ctx.send("Choose a channel to send the register message:", view=channel_dropdown)
-    print(channel_dropdown.values[0])
+    
+    channel_dropdown = disnake.ui.ChannelSelect(channel_types=[ChannelType.text]) # https://guide.disnake.dev/interactions/select-menus#example-of-stringselects
+    #channel_dropdown.callback = lambda result: setup_channel_select_callback(result, ctx, message)
+    #channel_dropdown.callback = setup_channel_select_callback
+    view.add_item(channel_dropdown)
 
-async def func():
-    print("Selected channel")
+    message = await ctx.send("Choose a channel to send the register message:", view=view, ephemeral=True)
+    channel_dropdown.callback = lambda result: setup_channel_select_callback(result, ctx, message)
+
+async def setup_channel_select_callback(result: disnake.MessageInteraction, ctx: disnake.ApplicationCommandInteraction = None, message: disnake.Message = None):
+    channel = bot.get_channel(int(result.values[0]))
+    if channel:
+        print("Selected channel")
+        print(f"id: {result.values[0]}")
+        await send_register_button(bot.get_channel(int(result.values[0])))
+        await message.edit(content="Message sent!", view=None)
+        #await result.response.send_message("Message sent!", ephemeral=True)
+        await result.message.edit(content="Message sent!", view=None)
+    else:
+        #await result.response.send_message("Error: channel not found.", ephemeral=True)
+        await result.message.edit(content="Error: channel not found.", view=None)
+
+async def send_register_button(channel: disnake.TextChannel):
+    view = disnake.ui.View()
+    button = disnake.ui.Button(label='Register', url=f"{getenv('SITE_URL')}", style=disnake.ButtonStyle.link)
+    view.add_item(button)
+    await channel.send("Use this link to register:", view=view)
+
 
 
 
